@@ -1,0 +1,46 @@
+# Python
+
+.venv/
+venv/
+**pycache**/
+*.py[cod]
+*$py.class
+
+# Environment variables and secrets
+
+.env
+.env.*
+!.env.example
+
+# Git
+
+.git/
+.gitignore
+
+# Django
+
+staticfiles/
+media/
+db.sqlite3
+celerybeat-schedule
+
+# Node.js
+
+node_modules/
+
+# IDE and OS
+
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Testing and coverage
+
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+
+*.log
