@@ -256,7 +256,7 @@ USE_TZ = True
 # Static files / Media files
 # -------------------------------------------------------------------
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 
 STATICFILES_DIRS = [
     BASE_DIR / "static",
@@ -314,3 +314,9 @@ CELERY_RESULT_BACKEND = config(
 )
 
 CELERY_TIMEZONE = TIME_ZONE
+
+CSRF_TRUSTED_ORIGINS = config(
+    "CSRF_TRUSTED_ORIGINS",
+    default="https://reservexai-production.up.railway.app",
+    cast=Csv(),
+)
