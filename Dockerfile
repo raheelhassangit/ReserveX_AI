@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN chmod +x entrypoint.sh entrypoint-worker.sh
+RUN chmod +x entrypoint.sh entrypoint-worker.sh entrypoint-railway.sh
 
 EXPOSE 8000
 
