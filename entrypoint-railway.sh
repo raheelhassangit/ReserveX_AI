@@ -1,7 +1,3 @@
-# git add entrypoint-railway.sh
-# git commit -m "Build Tailwind CSS before collecting static files"
-# git push origin main
-
 #!/bin/sh
 set -e
 
