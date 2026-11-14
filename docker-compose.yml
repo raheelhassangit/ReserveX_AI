@@ -1,6 +1,8 @@
 x-django: &django
   image: reservex-app:latest
   env_file: .env
+  volumes:
+    - .:/app
   environment:
     DB_HOST: db
     DB_PORT: 5432
