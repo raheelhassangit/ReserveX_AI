@@ -1,3 +1,12 @@
+x-django: &django
+  image: reservex-app:latest
+  env_file: .env
+  environment:
+    DB_HOST: db
+    DB_PORT: 5432
+    CELERY_BROKER_URL: redis://redis:6379/0
+    CELERY_RESULT_BACKEND: redis://redis:6379/0
+
 services:
   db:
     image: postgres:16-alpine
@@ -23,62 +32,48 @@ services:
       timeout: 5s
       retries: 5
 
-  web:
+  migrate:
+    <<: *django
     build: .
-    image: reservex-app:latest
+    restart: "no"
+    command: python manage.py migrate --noinput
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    <<: *django
     restart: unless-stopped
-    env_file: .env
-    environment:
-      DB_HOST: db
-      DB_PORT: 5432
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
     ports:
-      - "8000:8000"
+      - "8001:8000"
+    command: python manage.py runserver 0.0.0.0:8000
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: python manage.py runserver 0.0.0.0:8000
+      migrate:
+        condition: service_completed_successfully
 
   worker:
-    image: reservex-app:latest
+    <<: *django
     restart: unless-stopped
-    env_file: .env
-    environment:
-      DB_HOST: db
-      DB_PORT: 5432
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    command: celery -A config worker -l info -P solo
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
-      web:
-        condition: service_started
-    entrypoint: ./entrypoint-worker.sh
-    command: celery -A config worker -l info -P solo
+      migrate:
+        condition: service_completed_successfully
 
   beat:
-    image: reservex-app:latest
+    <<: *django
     restart: unless-stopped
-    env_file: .env
-    environment:
-      DB_HOST: db
-      DB_PORT: 5432
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    command: celery -A config beat -l info -S django_celery_beat.schedulers:DatabaseScheduler
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
-      web:
-        condition: service_started
-    entrypoint: ./entrypoint-worker.sh
-    command: celery -A config beat -l info -S django_celery_beat.schedulers:DatabaseScheduler
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   postgres_data:
