@@ -23,6 +23,7 @@ __pycache__/
 venv/
 env/
 ENV/
+agent_service/.env
 
 # ==============================
 # Django

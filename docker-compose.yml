@@ -79,3 +79,17 @@ services:
 
 volumes:
   postgres_data:
+
+  agent:
+    build: ./agent_service
+    restart: unless-stopped
+    env_file: ./agent_service/.env
+    environment:
+      DJANGO_API_URL: http://web:8000
+    ports:
+      - "8002:8000"
+    volumes:
+      - ./agent_service/app:/code/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      - web  
