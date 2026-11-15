@@ -44,3 +44,7 @@ htmlcov/
 # Logs
 
 *.log
+
+#others
+
+agent_service/
