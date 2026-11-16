@@ -3,15 +3,26 @@ import httpx
 from .config import settings
 
 
-async def chat(messages: list[dict], tools: list[dict] | None = None) -> dict:
+async def chat(
+    messages: list[dict],
+    tools: list[dict] | None = None,
+    format: dict | str | None = None,
+    temperature: float | None = None,
+) -> dict:
+    options = {"num_ctx": settings.ollama_num_ctx}
+    if temperature is not None:
+        options["temperature"] = temperature
+
     payload = {
         "model": settings.ollama_model,
         "messages": messages,
         "stream": False,
-        "options": {"num_ctx": settings.ollama_num_ctx},
+        "options": options,
     }
     if tools:
         payload["tools"] = tools
+    if format:
+        payload["format"] = format
 
     async with httpx.AsyncClient(timeout=120) as client:
         response = await client.post(
