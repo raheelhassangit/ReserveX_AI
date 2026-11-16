@@ -6,6 +6,8 @@ FAKE_OFFERINGS = [
 
 
 async def search_offerings(query: str, max_price: float | None = None) -> dict:
+    if not query or not query.strip():
+        return {"error": "query is required, e.g. 'Lahore Islamabad'"}
     results = [
         o for o in FAKE_OFFERINGS
         if all(word in o["title"].lower() for word in query.lower().split())

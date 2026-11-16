@@ -4,6 +4,8 @@ import logging
 from . import llm
 from .tools import TOOL_FUNCTIONS, TOOL_SCHEMAS
 
+from .guard import OUT_OF_SCOPE_REPLY, classify
+
 logger = logging.getLogger("agent")
 
 MAX_STEPS = 6
@@ -18,6 +20,14 @@ SYSTEM_PROMPT = (
     "say so politely and explain what you can help with. "
     "Keep answers short."
 )
+
+GREETING_PROMPT = (
+    "You are the ReserveX assistant. Reply briefly and warmly to greetings, "
+    "thanks and goodbyes. If asked what you can do, say you can search bus "
+    "trips and appointments for the user. Never invent offerings or prices."
+)
+
+GREETING_FALLBACK = "Hi! I can help you search bus trips and appointments."
 
 NUDGE = (
     "Your last reply was empty. Either call a tool, or answer the user in "
@@ -45,6 +55,21 @@ async def run_agent(user_message: str) -> dict:
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_message},
     ]
+
+    category = await classify(user_message)
+
+    if category == "other":
+        return {"reply": OUT_OF_SCOPE_REPLY, "trace": messages}
+
+    if category == "greeting":
+        greet_messages = [
+            {"role": "system", "content": GREETING_PROMPT},
+            {"role": "user", "content": user_message},
+        ]
+        reply = await llm.chat(greet_messages)  # no tools offered at all
+        content = (reply.get("content") or "").strip() or GREETING_FALLBACK
+        return {"reply": content, "trace": greet_messages}
+
     empty_retries = 0
 
     for _ in range(MAX_STEPS):
