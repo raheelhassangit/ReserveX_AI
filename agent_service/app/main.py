@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from . import llm
 from .agent import SYSTEM_PROMPT, run_agent
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("agent")
 
 app = FastAPI(title="ReserveX Agent Service")

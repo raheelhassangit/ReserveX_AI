@@ -2,7 +2,7 @@ import json
 import logging
 from datetime import date
 from . import llm
-from .tools import TOOL_FUNCTIONS, TOOL_SCHEMAS
+from .tools import TOOL_FUNCTIONS, TOOL_SCHEMAS, TOOL_CONTEXT, ToolContext
 
 from .guard import OUT_OF_SCOPE_REPLY, classify
 
@@ -37,17 +37,20 @@ NUDGE = (
 FALLBACK = "Sorry, I couldn't process that. Could you rephrase your request?"
 
 
-async def execute_tool(name: str, args: dict) -> dict:
+async def execute_tool(name: str, args: dict, ctx: ToolContext) -> dict:
     func = TOOL_FUNCTIONS.get(name)
     if func is None:
-        return {"error": f"Unknown tool '{name}'"}
-    try:
-        return await func(**args)
-    except TypeError as e:
-        return {"error": f"Bad arguments: {e}"}
-    except Exception as e:
-        logger.exception("Tool %s failed", name)
-        return {"error": f"Tool failed: {e}"}
+        result = {"error": f"Unknown tool '{name}'"}
+    else:
+        try:
+            result = await func(ctx, **args)
+        except TypeError as e:
+            result = {"error": f"Bad arguments: {e}"}
+        except Exception as e:
+            logger.exception("Tool %s failed", name)
+            result = {"error": f"Tool failed: {e}"}
+    logger.info("TOOL %s args=%s -> %s", name, args, str(result)[:300])
+    return result
 
 
 async def run_agent(user_message: str) -> dict:
