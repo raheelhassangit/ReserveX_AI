@@ -44,7 +44,7 @@ def offerings_queryset():
 class OfferingListCreateView(generics.ListCreateAPIView):
     filterset_class = OfferingFilter
     search_fields = ["name", "organization__name"]
-    ordering_fields = ["total_seats", "created_at", "available_count"]
+    ordering_fields = ["total_seats", "created_at", "available_count", "price", "starts_at"]
     ordering = ["-created_at"]
 
     def get_queryset(self):
