@@ -1,6 +1,6 @@
 import json
 import logging
-
+from datetime import date
 from . import llm
 from .tools import TOOL_FUNCTIONS, TOOL_SCHEMAS
 
@@ -52,7 +52,10 @@ async def execute_tool(name: str, args: dict) -> dict:
 
 async def run_agent(user_message: str) -> dict:
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {
+            "role": "system",
+            "content": SYSTEM_PROMPT + f" Today's date is {date.today().isoformat()}.",
+        },
         {"role": "user", "content": user_message},
     ]
 
