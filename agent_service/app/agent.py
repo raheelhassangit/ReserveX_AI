@@ -2,7 +2,7 @@ import json
 import logging
 from datetime import date
 from . import llm
-from .tools import TOOL_FUNCTIONS, TOOL_SCHEMAS, TOOL_CONTEXT, ToolContext
+from .tools import TOOL_FUNCTIONS, TOOL_SCHEMAS, ToolContext
 
 from .guard import OUT_OF_SCOPE_REPLY, classify
 
