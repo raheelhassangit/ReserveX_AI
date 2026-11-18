@@ -1,7 +1,7 @@
 import logging
 
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Header, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -20,17 +20,17 @@ class ChatIn(BaseModel):
 
 @app.exception_handler(httpx.HTTPStatusError)
 async def llm_status_error(request: Request, exc: httpx.HTTPStatusError):
-    logger.error("LLM returned %s: %s", exc.response.status_code, exc.response.text)
+    logger.error("Upstream returned %s: %s", exc.response.status_code, exc.response.text)
     return JSONResponse(
         status_code=502,
-        content={"detail": f"LLM error {exc.response.status_code}: {exc.response.text[:200]}"},
+        content={"detail": f"Upstream error {exc.response.status_code}: {exc.response.text[:200]}"},
     )
 
 
 @app.exception_handler(httpx.RequestError)
 async def llm_unreachable(request: Request, exc: httpx.RequestError):
-    logger.error("LLM unreachable: %r", exc)
-    return JSONResponse(status_code=502, content={"detail": f"LLM unreachable: {exc!r}"})
+    logger.error("Upstream unreachable: %r", exc)
+    return JSONResponse(status_code=502, content={"detail": f"Upstream unreachable: {exc!r}"})
 
 
 @app.get("/health")
@@ -50,5 +50,8 @@ async def chat(body: ChatIn):
 
 
 @app.post("/agent")
-async def agent(body: ChatIn):
-    return await run_agent(body.message)
+async def agent(body: ChatIn, authorization: str | None = Header(default=None)):
+    token = None
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+    return await run_agent(body.message, token=token)
