@@ -115,7 +115,7 @@ function toggleSeat(seatId) {
 
 function updateBookingBar() {
     const bar = document.getElementById("booking-bar");
-    bar.classList.toggle("hidden", selectedSeats.size === 0);
+    bar.classList.toggle("hidden", selectedSeats.size === 0 || holdActive);
     document.getElementById("selected-count").textContent = selectedSeats.size;
 }
 
@@ -242,6 +242,40 @@ document.addEventListener("click", (e) => {
         if (!proceed) e.preventDefault();
     }
 }, true);
+
+document.getElementById("hold-btn").addEventListener("click", async () => {
+    if (!getAccessToken()) { window.location.href = "/login/"; return; }
+    if (selectedSeats.size === 0) return;
+
+    const btn = document.getElementById("hold-btn");
+    btn.disabled = true;
+
+    const seatIds = Array.from(selectedSeats);
+    const res = await apiFetch("/bookings/hold/", {
+        method: "POST",
+        body: JSON.stringify({ offering: parseInt(offeringId, 10), seat_ids: seatIds }),
+    });
+    const data = await res.json().catch(() => ({}));
+    btn.disabled = false;
+
+    if (!res.ok) {
+        showError(data.detail || JSON.stringify(data));
+        selectedSeats.clear();
+        loadOffering();
+        return;
+    }
+
+    heldSeats = seatIds;
+    holdActive = true;
+    hideError();
+    document.getElementById("confirm-bar").classList.remove("hidden");
+    startHoldTimer(
+        data.held_until
+            ? new Date(data.held_until)
+            : new Date(Date.now() + 5 * 60 * 1000)
+    );
+    loadOffering();
+});
 
 loadOffering();
 </script>

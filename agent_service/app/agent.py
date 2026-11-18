@@ -1,10 +1,10 @@
 import json
 import logging
 from datetime import date
-from . import llm
-from .tools import TOOL_FUNCTIONS, TOOL_SCHEMAS
 
+from . import llm
 from .guard import OUT_OF_SCOPE_REPLY, classify
+from .tools import TOOL_FUNCTIONS, TOOL_SCHEMAS, ToolContext
 
 logger = logging.getLogger("agent")
 
@@ -12,12 +12,11 @@ MAX_STEPS = 6
 EMPTY_RETRIES = 2
 
 SYSTEM_PROMPT = (
-    "You are the ReserveX booking assistant. ReserveX handles reservations "
-    "for bus trips and appointments only. "
+    "You are the ReserveX booking assistant. "
+    "You can ONLY do what your tools allow. Right now that is: search offerings. "
+    "If the user asks for anything else (holding seats, cancelling, viewing bookings), "
+    "say that you can't do that yet and offer to search offerings instead. "
     "Always use tools to check real availability and prices; never guess. "
-    "Do not recommend offerings with 0 seats left. "
-    "If a request is outside ReserveX (for example flights or hotels), "
-    "say so politely and explain what you can help with. "
     "Keep answers short."
 )
 
@@ -37,20 +36,25 @@ NUDGE = (
 FALLBACK = "Sorry, I couldn't process that. Could you rephrase your request?"
 
 
-async def execute_tool(name: str, args: dict) -> dict:
+async def execute_tool(name: str, args: dict, ctx: ToolContext) -> dict:
     func = TOOL_FUNCTIONS.get(name)
     if func is None:
-        return {"error": f"Unknown tool '{name}'"}
-    try:
-        return await func(**args)
-    except TypeError as e:
-        return {"error": f"Bad arguments: {e}"}
-    except Exception as e:
-        logger.exception("Tool %s failed", name)
-        return {"error": f"Tool failed: {e}"}
+        result = {"error": f"Unknown tool '{name}'"}
+    else:
+        try:
+            result = await func(ctx, **args)
+        except TypeError as e:
+            result = {"error": f"Bad arguments: {e}"}
+        except Exception as e:
+            logger.exception("Tool %s failed", name)
+            result = {"error": f"Tool failed: {e}"}
+    logger.info("TOOL %s args=%s -> %s", name, args, str(result)[:300])
+    return result
 
 
-async def run_agent(user_message: str) -> dict:
+async def run_agent(user_message: str, token: str | None = None) -> dict:
+    ctx = ToolContext(token=token)
+
     messages = [
         {
             "role": "system",
@@ -80,7 +84,6 @@ async def run_agent(user_message: str) -> dict:
         tool_calls = reply.get("tool_calls")
         content = (reply.get("content") or "").strip()
 
-        # Case 1: model returned nothing at all
         if not tool_calls and not content:
             if empty_retries < EMPTY_RETRIES:
                 empty_retries += 1
@@ -89,21 +92,18 @@ async def run_agent(user_message: str) -> dict:
                 continue
             return {"reply": FALLBACK, "trace": messages}
 
-        # Normalise the assistant message so the history is always well-formed
         assistant_msg = {"role": "assistant", "content": content}
         if tool_calls:
             assistant_msg["tool_calls"] = tool_calls
         messages.append(assistant_msg)
 
-        # Case 2: plain text answer, we're done
         if not tool_calls:
             return {"reply": content, "trace": messages}
 
-        # Case 3: tool calls, run them and loop again
         for call in tool_calls:
             name = call["function"]["name"]
             args = call["function"]["arguments"]
-            result = await execute_tool(name, args)
+            result = await execute_tool(name, args, ctx)
             messages.append(
                 {"role": "tool", "tool_name": name, "content": json.dumps(result)}
             )
