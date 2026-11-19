@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     ollama_model: str = "gemma4:31b"
     django_api_url: str = "http://web:8000"
     ollama_num_ctx: int = 8192
+    redis_url: str = "redis://redis:6379/1"
+    app_timezone: str = "Asia/Karachi"
 
     model_config = SettingsConfigDict(extra="ignore")
 
