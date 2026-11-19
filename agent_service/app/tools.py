@@ -2,11 +2,19 @@ from dataclasses import dataclass
 from datetime import date as date_cls
 
 from .django_client import django_get
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
+from .config import settings
 
 @dataclass
 class ToolContext:
     token: str | None = None
+
+
+def _local(iso: str) -> str:
+    dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    return dt.astimezone(ZoneInfo(settings.app_timezone)).strftime("%a %d %b %Y, %I:%M %p")
 
 
 def _shape(o: dict) -> dict:
@@ -16,7 +24,7 @@ def _shape(o: dict) -> dict:
         "organization": o["organization_name"],
         "origin": o["origin"],
         "destination": o["destination"],
-        "starts_at": o["starts_at"],
+        "departs": _local(o["starts_at"]),
         "price": float(o["price"]) if o.get("price") is not None else None,
         "available_seats": o["available_seats"],
         "max_seats_per_booking": o["max_seats_per_booking"],

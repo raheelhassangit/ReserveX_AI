@@ -1,8 +1,10 @@
 import json
 import logging
-from datetime import date
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
-from . import llm
+from . import llm, session
+from .config import settings
 from .guard import OUT_OF_SCOPE_REPLY, classify
 from .tools import TOOL_FUNCTIONS, TOOL_SCHEMAS, ToolContext
 
@@ -36,6 +38,15 @@ NUDGE = (
 FALLBACK = "Sorry, I couldn't process that. Could you rephrase your request?"
 
 
+def _today() -> str:
+    return datetime.now(ZoneInfo(settings.app_timezone)).date().isoformat()
+
+
+async def _persist(user_key: str, session_id: str, messages: list[dict], category: str) -> None:
+    history = [m for m in messages[1:] if m.get("content") != NUDGE]
+    await session.save(user_key, session_id, history, category)
+
+
 async def execute_tool(name: str, args: dict, ctx: ToolContext) -> dict:
     func = TOOL_FUNCTIONS.get(name)
     if func is None:
@@ -52,30 +63,42 @@ async def execute_tool(name: str, args: dict, ctx: ToolContext) -> dict:
     return result
 
 
-async def run_agent(user_message: str, token: str | None = None) -> dict:
+async def run_agent(
+    user_message: str, token: str | None, user_key: str, session_id: str
+) -> dict:
     ctx = ToolContext(token=token)
+    state = await session.load(user_key, session_id)
 
     messages = [
-        {
-            "role": "system",
-            "content": SYSTEM_PROMPT + f" Today's date is {date.today().isoformat()}.",
-        },
+        {"role": "system", "content": SYSTEM_PROMPT + f" Today's date is {_today()}."},
+        *state["messages"],
         {"role": "user", "content": user_message},
     ]
+    start = len(messages) - 1  # this turn begins at the new user message
 
-    category = await classify(user_message)
+    # Replies like "yes" or "the first one" have no keywords, so once a
+    # conversation is in the reservation flow we stay in it.
+    if state["last_category"] == "reservation":
+        category = "reservation"
+    else:
+        category = await classify(user_message)
 
     if category == "other":
-        return {"reply": OUT_OF_SCOPE_REPLY, "trace": messages}
+        messages.append({"role": "assistant", "content": OUT_OF_SCOPE_REPLY})
+        await _persist(user_key, session_id, messages, category)
+        return {"reply": OUT_OF_SCOPE_REPLY, "trace": messages[start:]}
 
     if category == "greeting":
-        greet_messages = [
-            {"role": "system", "content": GREETING_PROMPT},
-            {"role": "user", "content": user_message},
-        ]
-        reply = await llm.chat(greet_messages)  # no tools offered at all
+        reply = await llm.chat(
+            [
+                {"role": "system", "content": GREETING_PROMPT},
+                {"role": "user", "content": user_message},
+            ]
+        )  # no tools offered at all
         content = (reply.get("content") or "").strip() or GREETING_FALLBACK
-        return {"reply": content, "trace": greet_messages}
+        messages.append({"role": "assistant", "content": content})
+        await _persist(user_key, session_id, messages, category)
+        return {"reply": content, "trace": messages[start:]}
 
     empty_retries = 0
 
@@ -90,7 +113,7 @@ async def run_agent(user_message: str, token: str | None = None) -> dict:
                 logger.warning("Empty model reply, nudging (%d)", empty_retries)
                 messages.append({"role": "user", "content": NUDGE})
                 continue
-            return {"reply": FALLBACK, "trace": messages}
+            break
 
         assistant_msg = {"role": "assistant", "content": content}
         if tool_calls:
@@ -98,7 +121,8 @@ async def run_agent(user_message: str, token: str | None = None) -> dict:
         messages.append(assistant_msg)
 
         if not tool_calls:
-            return {"reply": content, "trace": messages}
+            await _persist(user_key, session_id, messages, "reservation")
+            return {"reply": content, "trace": messages[start:]}
 
         for call in tool_calls:
             name = call["function"]["name"]
@@ -108,4 +132,6 @@ async def run_agent(user_message: str, token: str | None = None) -> dict:
                 {"role": "tool", "tool_name": name, "content": json.dumps(result)}
             )
 
-    return {"reply": FALLBACK, "trace": messages}
+    messages.append({"role": "assistant", "content": FALLBACK})
+    await _persist(user_key, session_id, messages, "reservation")
+    return {"reply": FALLBACK, "trace": messages[start:]}
