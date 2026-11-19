@@ -14,3 +14,6 @@ async def django_get(path: str, token: str | None = None, params: dict | None = 
         return {"error": "The user's session is invalid or expired. Ask them to log in again."}
     response.raise_for_status()
     return response.json()
+
+async def get_me(token: str) -> dict:
+    return await django_get("/api/accounts/me/", token)
