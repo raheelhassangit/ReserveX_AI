@@ -56,3 +56,34 @@ async def classify(message: str) -> str:
     except Exception:
         logger.warning("Classification failed, defaulting to reservation", exc_info=True)
         return "reservation"
+    
+DECISION_PROMPT = """The user was just asked to confirm a seat booking. Classify their reply.
+- confirm: a clear yes ("yes", "confirm", "go ahead", "book it", "ok do it")
+- cancel: a clear no or change of mind ("no", "cancel", "never mind", "release them")
+- other: anything else (questions, unrelated, unclear, "maybe", "which seats?")
+
+Answer only with JSON."""
+
+DECISION_SCHEMA = {
+    "type": "object",
+    "properties": {"decision": {"type": "string", "enum": ["confirm", "cancel", "other"]}},
+    "required": ["decision"],
+}
+
+
+async def classify_decision(message: str) -> str:
+    try:
+        reply = await llm.chat(
+            [
+                {"role": "system", "content": DECISION_PROMPT},
+                {"role": "user", "content": message},
+            ],
+            format=DECISION_SCHEMA,
+            temperature=0,
+        )
+        decision = json.loads(reply["content"])["decision"]
+        logger.info("Decision: %s", decision)
+        return decision
+    except Exception:
+        logger.warning("Decision check failed", exc_info=True)
+        return "other"  # when unsure, never confirm    
