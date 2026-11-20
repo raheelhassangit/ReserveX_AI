@@ -1,5 +1,6 @@
 import logging
 import re
+from typing import Literal
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -23,6 +24,7 @@ class ChatIn(BaseModel):
 class AgentIn(BaseModel):
     message: str
     session_id: str | None = None
+    action: Literal["confirm", "cancel"] | None = None
 
 
 @app.exception_handler(httpx.HTTPStatusError)
@@ -75,5 +77,5 @@ async def agent(body: AgentIn, authorization: str | None = Header(default=None))
     if not session_id or not re.fullmatch(r"[0-9a-f]{32}", session_id):
         session_id = session.new_session_id()
 
-    result = await run_agent(body.message, token, user_key, session_id)
+    result = await run_agent(body.message, token, user_key, session_id, body.action)
     return {"session_id": session_id, **result}
