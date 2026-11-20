@@ -22,18 +22,20 @@ def _key(user_key: str, session_id: str) -> str:
 async def load(user_key: str, session_id: str) -> dict:
     raw = await _redis.get(_key(user_key, session_id))
     if not raw:
-        return {"messages": [], "last_category": None}
-    return json.loads(raw)
+        return {"messages": [], "last_category": None, "pending": None}
+    data = json.loads(raw)
+    data.setdefault("pending", None)
+    return data
 
 
 def _trim(messages: list[dict]) -> list[dict]:
     messages = messages[-MAX_MESSAGES:]
-    # never start in the middle of a tool exchange
     while messages and messages[0]["role"] != "user":
         messages = messages[1:]
     return messages
 
 
-async def save(user_key: str, session_id: str, messages: list[dict], last_category: str) -> None:
-    data = {"messages": _trim(messages), "last_category": last_category}
+async def save(user_key: str, session_id: str, messages: list[dict],
+               last_category: str, pending: dict | None = None) -> None:
+    data = {"messages": _trim(messages), "last_category": last_category, "pending": pending}
     await _redis.set(_key(user_key, session_id), json.dumps(data), ex=SESSION_TTL_SECONDS)
