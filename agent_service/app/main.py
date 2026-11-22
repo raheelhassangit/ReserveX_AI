@@ -5,10 +5,12 @@ from typing import Literal
 import httpx
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
+from langchain_core.messages import HumanMessage
+from langgraph.errors import GraphRecursionError
 from pydantic import BaseModel
 
-from . import llm, session
-from .agent import SYSTEM_PROMPT, run_agent
+from . import session
+from .agent import graph
 from .django_client import get_me
 
 logging.basicConfig(level=logging.INFO)
@@ -17,14 +19,10 @@ logger = logging.getLogger("agent")
 app = FastAPI(title="ReserveX Agent Service")
 
 
-class ChatIn(BaseModel):
-    message: str
-
-
 class AgentIn(BaseModel):
     message: str
-    session_id: str | None = None
-    action: Literal["confirm", "cancel"] | None = None
+    session_id: str | None = None  # used from step 4 (memory)
+    action: Literal["confirm", "cancel"] | None = None  # used from step 3 (approval)
 
 
 @app.exception_handler(httpx.HTTPStatusError)
@@ -47,17 +45,6 @@ async def health():
     return {"status": "ok"}
 
 
-@app.post("/chat")
-async def chat(body: ChatIn):
-    reply = await llm.chat(
-        [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": body.message},
-        ]
-    )
-    return {"reply": reply["content"]}
-
-
 @app.post("/agent")
 async def agent(body: AgentIn, authorization: str | None = Header(default=None)):
     token = None
@@ -77,5 +64,26 @@ async def agent(body: AgentIn, authorization: str | None = Header(default=None))
     if not session_id or not re.fullmatch(r"[0-9a-f]{32}", session_id):
         session_id = session.new_session_id()
 
-    result = await run_agent(body.message, token, user_key, session_id, body.action)
-    return {"session_id": session_id, **result}
+    logger.info("agent call user=%s session=%s", user_key, session_id)
+
+    try:
+        result = await graph.ainvoke(
+            {"messages": [HumanMessage(content=body.message)]},
+            config={"configurable": {"token": token}, "recursion_limit": 12},
+        )
+    except GraphRecursionError:
+        return {
+            "session_id": session_id,
+            "reply": "Sorry, I couldn't complete that request.",
+            "trace": [],
+        }
+
+    messages = result["messages"]
+    reply = (messages[-1].content or "").strip() or (
+        "Sorry, I couldn't process that. Could you rephrase your request?"
+    )
+    trace = [
+        {"type": m.type, "content": m.content, "tool_calls": getattr(m, "tool_calls", None)}
+        for m in messages
+    ]
+    return {"session_id": session_id, "reply": reply, "trace": trace}
