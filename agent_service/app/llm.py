@@ -1,34 +1,12 @@
-import httpx
+from langchain_ollama import ChatOllama
 
 from .config import settings
 
-
-async def chat(
-    messages: list[dict],
-    tools: list[dict] | None = None,
-    format: dict | str | None = None,
-    temperature: float | None = None,
-) -> dict:
-    options = {"num_ctx": settings.ollama_num_ctx}
-    if temperature is not None:
-        options["temperature"] = temperature
-
-    payload = {
-        "model": settings.ollama_model,
-        "messages": messages,
-        "stream": False,
-        "options": options,
-    }
-    if tools:
-        payload["tools"] = tools
-    if format:
-        payload["format"] = format
-
-    async with httpx.AsyncClient(timeout=120) as client:
-        response = await client.post(
-            f"{settings.ollama_base_url}/api/chat",
-            headers={"Authorization": f"Bearer {settings.ollama_api_key}"},
-            json=payload,
-        )
-        response.raise_for_status()
-        return response.json()["message"]
+llm = ChatOllama(
+    model=settings.ollama_model,
+    base_url=settings.ollama_base_url,
+    num_ctx=settings.ollama_num_ctx,
+    temperature=0,
+    # Ignored by local Ollama; used if we switch back to the cloud API.
+    client_kwargs={"headers": {"Authorization": f"Bearer {settings.ollama_api_key}"}},
+)
