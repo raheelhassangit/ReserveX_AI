@@ -1,7 +1,10 @@
-import json
 import logging
+from typing import Literal
 
-from . import llm
+from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import BaseModel
+
+from .llm import llm
 
 logger = logging.getLogger("agent")
 
@@ -22,17 +25,7 @@ Examples:
 "Find me the cheapest Karachi flight" -> other
 "book a hotel in Murree" -> other
 "write a poem" -> other
-"who won the match?" -> other
-
-Answer only with JSON."""
-
-SCOPE_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "category": {"type": "string", "enum": ["reservation", "greeting", "other"]}
-    },
-    "required": ["category"],
-}
+"who won the match?" -> other"""
 
 OUT_OF_SCOPE_REPLY = (
     "I can only help with ReserveX reservations: searching bus trips and "
@@ -40,50 +33,22 @@ OUT_OF_SCOPE_REPLY = (
 )
 
 
+class Scope(BaseModel):
+    category: Literal["reservation", "greeting", "other"]
+
+
+_classifier = llm.with_structured_output(Scope)
+
+
 async def classify(message: str) -> str:
     try:
-        reply = await llm.chat(
-            [
-                {"role": "system", "content": SCOPE_PROMPT},
-                {"role": "user", "content": message},
-            ],
-            format=SCOPE_SCHEMA,
-            temperature=0,
+        result = await _classifier.ainvoke(
+            [SystemMessage(content=SCOPE_PROMPT), HumanMessage(content=message)]
         )
-        category = json.loads(reply["content"])["category"]
-        logger.info("Scope category: %s", category)
-        return category
+        if result is None:
+            return "reservation"
+        logger.info("Scope category: %s", result.category)
+        return result.category
     except Exception:
         logger.warning("Classification failed, defaulting to reservation", exc_info=True)
         return "reservation"
-    
-DECISION_PROMPT = """The user was just asked to confirm a seat booking. Classify their reply.
-- confirm: a clear yes ("yes", "confirm", "go ahead", "book it", "ok do it")
-- cancel: a clear no or change of mind ("no", "cancel", "never mind", "release them")
-- other: anything else (questions, unrelated, unclear, "maybe", "which seats?")
-
-Answer only with JSON."""
-
-DECISION_SCHEMA = {
-    "type": "object",
-    "properties": {"decision": {"type": "string", "enum": ["confirm", "cancel", "other"]}},
-    "required": ["decision"],
-}
-
-
-async def classify_decision(message: str) -> str:
-    try:
-        reply = await llm.chat(
-            [
-                {"role": "system", "content": DECISION_PROMPT},
-                {"role": "user", "content": message},
-            ],
-            format=DECISION_SCHEMA,
-            temperature=0,
-        )
-        decision = json.loads(reply["content"])["decision"]
-        logger.info("Decision: %s", decision)
-        return decision
-    except Exception:
-        logger.warning("Decision check failed", exc_info=True)
-        return "other"  # when unsure, never confirm    
