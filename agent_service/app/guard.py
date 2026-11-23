@@ -27,6 +27,11 @@ Examples:
 "write a poem" -> other
 "who won the match?" -> other"""
 
+DECISION_PROMPT = """The user was just asked to confirm a seat booking. Classify their reply.
+- confirm: a clear yes ("yes", "confirm", "go ahead", "book it", "ok do it")
+- cancel: a clear no or change of mind ("no", "cancel", "never mind", "release them")
+- other: anything else (questions, unrelated, unclear, "maybe", "which seats?")"""
+
 OUT_OF_SCOPE_REPLY = (
     "I can only help with ReserveX reservations: searching bus trips and "
     "appointments, holding seats, and managing your bookings."
@@ -37,7 +42,12 @@ class Scope(BaseModel):
     category: Literal["reservation", "greeting", "other"]
 
 
+class Decision(BaseModel):
+    decision: Literal["confirm", "cancel", "other"]
+
+
 _classifier = llm.with_structured_output(Scope)
+_decider = llm.with_structured_output(Decision)
 
 
 async def classify(message: str) -> str:
@@ -52,3 +62,16 @@ async def classify(message: str) -> str:
     except Exception:
         logger.warning("Classification failed, defaulting to reservation", exc_info=True)
         return "reservation"
+
+
+async def classify_decision(message: str) -> str:
+    try:
+        result = await _decider.ainvoke(
+            [SystemMessage(content=DECISION_PROMPT), HumanMessage(content=message)]
+        )
+        decision = result.decision if result else "other"
+        logger.info("Decision: %s", decision)
+        return decision
+    except Exception:
+        logger.warning("Decision check failed", exc_info=True)
+        return "other"  # when unsure, never confirm
