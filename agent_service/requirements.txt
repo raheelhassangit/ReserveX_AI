@@ -7,3 +7,5 @@ redis
 langgraph
 langchain-core
 langchain-ollama
+langgraph-checkpoint-postgres
+psycopg[binary,pool]

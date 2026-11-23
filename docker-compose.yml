@@ -83,7 +83,6 @@ services:
     env_file: ./agent_service/.env
     environment:
       DJANGO_API_URL: http://web:8000
-      REDIS_URL: redis://redis:6379/1
     ports:
       - "8002:8000"
     volumes:
@@ -92,7 +91,7 @@ services:
     depends_on:
       web:
         condition: service_started
-      redis:
+      db:
         condition: service_healthy
 
 volumes:
