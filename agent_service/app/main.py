@@ -1,24 +1,46 @@
 import logging
 import re
+import uuid
+from contextlib import asynccontextmanager
 from typing import Literal
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from langchain_core.messages import HumanMessage
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.errors import GraphRecursionError
 from langgraph.types import Command
+from psycopg.rows import dict_row
+from psycopg_pool import AsyncConnectionPool
 from pydantic import BaseModel
 
-from . import session
-from .agent import FALLBACK, graph
+from .agent import FALLBACK, build_graph
+from .config import settings
 from .django_client import get_me
 from .tools import current_token
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("agent")
 
-app = FastAPI(title="ReserveX Agent Service")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Runs once at startup: open the pool, create the tables, build the graph.
+    async with AsyncConnectionPool(
+        settings.agent_db_url,
+        max_size=5,
+        open=False,
+        kwargs={"autocommit": True, "prepare_threshold": 0, "row_factory": dict_row},
+    ) as pool:
+        saver = AsyncPostgresSaver(pool)
+        await saver.setup()
+        app.state.graph = build_graph(saver)
+        yield
+    # leaving the "async with" closes the pool on shutdown
+
+
+app = FastAPI(title="ReserveX Agent Service", lifespan=lifespan)
 
 
 class AgentIn(BaseModel):
@@ -48,7 +70,13 @@ async def health():
 
 
 @app.post("/agent")
-async def agent(body: AgentIn, authorization: str | None = Header(default=None)):
+async def agent(
+    body: AgentIn,
+    request: Request,
+    authorization: str | None = Header(default=None),
+):
+    graph = request.app.state.graph
+
     token = None
     if authorization and authorization.lower().startswith("bearer "):
         token = authorization[7:].strip()
@@ -64,7 +92,7 @@ async def agent(body: AgentIn, authorization: str | None = Header(default=None))
 
     session_id = body.session_id
     if not session_id or not re.fullmatch(r"[0-9a-f]{32}", session_id):
-        session_id = session.new_session_id()
+        session_id = uuid.uuid4().hex
 
     # One graph thread per user+session: another user can't resume this one.
     config = {

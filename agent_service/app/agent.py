@@ -7,6 +7,7 @@ from langchain_core.messages import (
     RemoveMessage,
     SystemMessage,
     ToolMessage,
+    trim_messages,
 )
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, MessagesState, StateGraph
@@ -20,6 +21,7 @@ from .llm import llm
 from .tools import TOOLS, current_token, pending_active
 
 EMPTY_RETRIES = 2
+MAX_CONTEXT_MESSAGES = 20
 
 SYSTEM_PROMPT = (
     "You are the ReserveX booking assistant. "
@@ -103,8 +105,18 @@ async def agent_node(state: AgentState) -> dict:
             f" The user has seats {', '.join(pending['seat_numbers'])} on hold for "
             f"{pending['offering_name']}, waiting for their confirmation."
         )
+    # The full history stays in the database; the model sees only the last 20 messages.
+    recent = trim_messages(
+        state["messages"],
+        strategy="last",
+        token_counter=len,  # count messages instead of tokens
+        max_tokens=MAX_CONTEXT_MESSAGES,
+        start_on="human",   # never begin in the middle of a tool exchange
+        end_on=("human", "tool"),
+        include_system=False,
+    )
     response = await llm_with_tools.ainvoke(
-        [SystemMessage(content=system_text), *state["messages"]]
+        [SystemMessage(content=system_text), *recent]
     )
     return {"messages": [response]}
 
@@ -196,7 +208,7 @@ def after_approval(state: AgentState) -> str:
     return "agent" if state["decision"] == "other" else "end"
 
 
-def build_graph():
+def build_graph(checkpointer):
     builder = StateGraph(AgentState)
 
     builder.add_node("router", router_node)
@@ -234,7 +246,4 @@ def build_graph():
     )
 
     # In-memory for now: state is lost when the container restarts.
-    return builder.compile(checkpointer=InMemorySaver())
-
-
-graph = build_graph()
+    return builder.compile(checkpointer=checkpointer)
