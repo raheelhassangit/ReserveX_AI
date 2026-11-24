@@ -208,7 +208,7 @@ def after_approval(state: AgentState) -> str:
     return "agent" if state["decision"] == "other" else "end"
 
 
-def build_graph():
+def build_graph(checkpointer):
     builder = StateGraph(AgentState)
 
     builder.add_node("router", router_node)
@@ -246,7 +246,4 @@ def build_graph():
     )
 
     # In-memory for now: state is lost when the container restarts.
-    return builder.compile(checkpointer=InMemorySaver())
-
-
-graph = build_graph()
+    return builder.compile(checkpointer=checkpointer)
