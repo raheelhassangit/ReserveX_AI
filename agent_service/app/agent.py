@@ -21,6 +21,7 @@ from .llm import llm
 from .tools import TOOLS, current_token, pending_active
 
 EMPTY_RETRIES = 2
+MAX_CONTEXT_MESSAGES = 20
 
 SYSTEM_PROMPT = (
     "You are the ReserveX booking assistant. "
