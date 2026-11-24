@@ -105,8 +105,18 @@ async def agent_node(state: AgentState) -> dict:
             f" The user has seats {', '.join(pending['seat_numbers'])} on hold for "
             f"{pending['offering_name']}, waiting for their confirmation."
         )
+    # The full history stays in the database; the model sees only the last 20 messages.
+    recent = trim_messages(
+        state["messages"],
+        strategy="last",
+        token_counter=len,  # count messages instead of tokens
+        max_tokens=MAX_CONTEXT_MESSAGES,
+        start_on="human",   # never begin in the middle of a tool exchange
+        end_on=("human", "tool"),
+        include_system=False,
+    )
     response = await llm_with_tools.ainvoke(
-        [SystemMessage(content=system_text), *state["messages"]]
+        [SystemMessage(content=system_text), *recent]
     )
     return {"messages": [response]}
 
