@@ -1,5 +1,6 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import logging
 
 from langchain_core.messages import (
     AIMessage,
@@ -51,7 +52,7 @@ NUDGE = (
 FALLBACK = "Sorry, I couldn't process that. Could you rephrase your request?"
 
 llm_with_tools = llm.bind_tools(TOOLS)
-
+logger = logging.getLogger("agent")
 
 class AgentState(MessagesState):
     category: str
@@ -118,17 +119,22 @@ async def agent_node(state: AgentState) -> dict:
     response = await llm_with_tools.ainvoke(
         [SystemMessage(content=system_text), *recent]
     )
+    if response.tool_calls:
+        logger.info("TOOL CALL %s", [(c["name"], c["args"]) for c in response.tool_calls])
     return {"messages": [response]}
 
 
 async def track_hold_node(state: AgentState) -> dict:
-    """After the tools ran: if one of them was a successful hold, remember it."""
+    """After the tools ran: log every result, and remember a successful hold."""
+    update: dict = {}
     for message in reversed(state["messages"]):
         if isinstance(message, AIMessage):
             break
-        if isinstance(message, ToolMessage) and message.name == "hold_seats" and message.artifact:
-            return {"pending": message.artifact}
-    return {}
+        if isinstance(message, ToolMessage):
+            logger.info("TOOL RESULT %s -> %s", message.name, str(message.content)[:300])
+            if message.name == "hold_seats" and message.artifact and not update:
+                update = {"pending": message.artifact}
+    return update
 
 
 async def nudge_node(state: AgentState) -> dict:
