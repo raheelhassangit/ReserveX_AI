@@ -119,6 +119,8 @@ async def agent_node(state: AgentState) -> dict:
     response = await llm_with_tools.ainvoke(
         [SystemMessage(content=system_text), *recent]
     )
+    if response.tool_calls:
+        logger.info("TOOL CALL %s", [(c["name"], c["args"]) for c in response.tool_calls])
     return {"messages": [response]}
 
 
