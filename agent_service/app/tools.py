@@ -172,6 +172,7 @@ async def hold_seats(
             return {
                 "error": f"Seats not available: {', '.join(missing)}",
                 "available_seat_numbers": list(free),
+                "hint": "If the user only said how many seats they want, call hold_seats again with seat_count instead of seat_numbers.",
             }, None
     else:
         if int(seat_count) > len(free):
