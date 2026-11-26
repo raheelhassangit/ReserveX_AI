@@ -148,8 +148,8 @@ async def hold_seats(
 
     Args:
         offering_id: The offering's id from a search result.
-        seat_numbers: Specific seat numbers the user asked for, e.g. ["5", "6"].
-        seat_count: How many seats, if no numbers were named.
+        seat_numbers: Only when the user names specific seats by number, e.g. "seats 5 and 6" gives ["5", "6"]. Never use this for "hold 2 seats".
+        seat_count: How many seats the user wants, e.g. "hold 1 seat" gives 1 and "hold 2 seats" gives 2. Use this when no seat numbers were named.
     """
     token = _token()
     if not token:
