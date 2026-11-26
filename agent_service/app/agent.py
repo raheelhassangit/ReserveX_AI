@@ -1,5 +1,6 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import logging
 
 from langchain_core.messages import (
     AIMessage,
@@ -51,7 +52,7 @@ NUDGE = (
 FALLBACK = "Sorry, I couldn't process that. Could you rephrase your request?"
 
 llm_with_tools = llm.bind_tools(TOOLS)
-
+logger = logging.getLogger("agent")
 
 class AgentState(MessagesState):
     category: str
