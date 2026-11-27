@@ -44,6 +44,12 @@ GREETING_PROMPT = (
 )
 
 GREETING_FALLBACK = "Hi! I can help you search bus trips and appointments."
+UNSUPPORTED_RE = re.compile(r"\b(cancel\w*|refund\w*|reschedul\w*|modify)\b", re.IGNORECASE)
+
+UNSUPPORTED_REPLY = (
+    "I can't cancel, change or refund bookings from chat yet. "
+    "I can search trips and hold seats for you."
+)
 
 NUDGE = (
     "Your last reply was empty. Either call a tool, or answer the user in "
