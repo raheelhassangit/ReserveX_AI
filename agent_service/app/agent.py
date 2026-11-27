@@ -203,6 +203,9 @@ async def approval_node(state: AgentState) -> dict:
 # ---------- routing functions ----------
 
 def route_by_category(state: AgentState) -> str:
+    # Checked in code, so the model can never claim an action we can't do.
+    if UNSUPPORTED_RE.search(state["messages"][-1].content):
+        return "unsupported"
     return state["category"]
 
 
