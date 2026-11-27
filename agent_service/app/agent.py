@@ -1,6 +1,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import logging
+import re
 
 from langchain_core.messages import (
     AIMessage,
@@ -43,6 +44,12 @@ GREETING_PROMPT = (
 )
 
 GREETING_FALLBACK = "Hi! I can help you search bus trips and appointments."
+UNSUPPORTED_RE = re.compile(r"\b(cancel\w*|refund\w*|reschedul\w*|modify)\b", re.IGNORECASE)
+
+UNSUPPORTED_REPLY = (
+    "I can't cancel, change or refund bookings from chat yet. "
+    "I can search trips and hold seats for you."
+)
 
 NUDGE = (
     "Your last reply was empty. Either call a tool, or answer the user in "
@@ -87,6 +94,9 @@ async def router_node(state: AgentState) -> dict:
 
 async def refuse_node(state: AgentState) -> dict:
     return {"messages": [AIMessage(content=OUT_OF_SCOPE_REPLY)]}
+
+async def unsupported_node(state: AgentState) -> dict:
+    return {"messages": [AIMessage(content=UNSUPPORTED_REPLY)]}
 
 
 async def greet_node(state: AgentState) -> dict:
@@ -196,6 +206,9 @@ async def approval_node(state: AgentState) -> dict:
 # ---------- routing functions ----------
 
 def route_by_category(state: AgentState) -> str:
+    # Checked in code, so the model can never claim an action we can't do.
+    if UNSUPPORTED_RE.search(state["messages"][-1].content):
+        return "unsupported"
     return state["category"]
 
 
@@ -225,14 +238,17 @@ def build_graph(checkpointer):
     builder.add_node("track_hold", track_hold_node)
     builder.add_node("nudge", nudge_node)
     builder.add_node("fallback", fallback_node)
+    builder.add_node("unsupported", unsupported_node)
     builder.add_node("approval", approval_node)
 
     builder.add_edge(START, "router")
     builder.add_conditional_edges(
         "router",
         route_by_category,
-        {"other": "refuse", "greeting": "greet", "reservation": "agent"},
+        {"other": "refuse", "greeting": "greet", "reservation": "agent",
+         "unsupported": "unsupported"},
     )
+    builder.add_edge("unsupported", END)
     builder.add_edge("refuse", END)
     builder.add_edge("greet", END)
 
@@ -250,6 +266,6 @@ def build_graph(checkpointer):
     builder.add_conditional_edges(
         "approval", after_approval, {"agent": "agent", "end": END}
     )
-
+   
     # In-memory for now: state is lost when the container restarts.
     return builder.compile(checkpointer=checkpointer)
