@@ -95,6 +95,9 @@ async def router_node(state: AgentState) -> dict:
 async def refuse_node(state: AgentState) -> dict:
     return {"messages": [AIMessage(content=OUT_OF_SCOPE_REPLY)]}
 
+async def unsupported_node(state: AgentState) -> dict:
+    return {"messages": [AIMessage(content=UNSUPPORTED_REPLY)]}
+
 
 async def greet_node(state: AgentState) -> dict:
     # No tools are bound here: a greeting can never trigger a search.
