@@ -238,6 +238,7 @@ def build_graph(checkpointer):
     builder.add_node("track_hold", track_hold_node)
     builder.add_node("nudge", nudge_node)
     builder.add_node("fallback", fallback_node)
+    builder.add_node("unsupported", unsupported_node)
     builder.add_node("approval", approval_node)
 
     builder.add_edge(START, "router")
