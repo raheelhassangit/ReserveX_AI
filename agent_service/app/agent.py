@@ -264,6 +264,12 @@ def build_graph(checkpointer):
     builder.add_conditional_edges(
         "approval", after_approval, {"agent": "agent", "end": END}
     )
-
+    builder.add_conditional_edges(
+        "router",
+        route_by_category,
+        {"other": "refuse", "greeting": "greet", "reservation": "agent",
+         "unsupported": "unsupported"},
+    )
+    builder.add_edge("unsupported", END)
     # In-memory for now: state is lost when the container restarts.
     return builder.compile(checkpointer=checkpointer)
